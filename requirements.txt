@@ -1,0 +1,5 @@
+longport==2.1.5
+openai==1.58.1
+schedule==1.2.2
+requests==2.32.3
+yagmail==0.15.293
