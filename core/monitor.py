@@ -63,7 +63,6 @@ class StockMonitor(BaseMonitor):
     def __init__(self, name):
         super().__init__(name)
         self.time = "09:10"
-        self.time = "14:30"
 
     def run(self):
         """
