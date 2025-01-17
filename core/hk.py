@@ -1,19 +1,35 @@
+import datetime
 import json
 import time
 import requests
-from longport.openapi import QuoteContext, Config, SubType, PushQuote
+from decimal import Decimal
+from longport.openapi import QuoteContext, Config, SubType, PushQuote, OrderType, OrderSide, TimeInForceType, TradeContext
+from longport.openapi import OrderStatus, Market
+from .constans import xiaomi_stock_code
+from .order import TODAY_IS_BUY, BUY_ORDERS, SELL_ORDERS, TARGET_PRICE, Order
 
 config = Config.from_env()
+quoteContext = QuoteContext(config)
+tradeContext = TradeContext(config)
 
 STOCKS = {
     "300750.SZ": "宁德时代",
-    "1810.HK": "小米集团",
+    xiaomi_stock_code: "小米集团",
     "700.HK": "腾讯控股",
     "9988.HK": "阿里巴巴",
     "3690.HK": "美团",
     "388.HK": "香港交易所",
 }
 
+def test():
+    res = []
+    def on_quote(symbol: str, event: PushQuote):
+        print(event)
+    
+    quoteContext.set_on_quote(on_quote)
+    quoteContext.subscribe([xiaomi_stock_code], [SubType.Quote], is_first_push=True)
+    while True:
+        time.sleep(1)
 
 def get_all_hk_trend():
     """
@@ -48,16 +64,17 @@ def get_all_hk_trend():
             print(e)
         print(stock_data)
 
-    ctx = QuoteContext(config)
-    ctx.set_on_quote(on_quote)
+    quoteContext.set_on_quote(on_quote)
 
     # 订阅股票
     symbols = [symbol for symbol in STOCKS.keys()]
-    ctx.subscribe(symbols, [SubType.Quote], is_first_push=True)
+    quoteContext.subscribe(symbols, [SubType.Quote], is_first_push=True)
 
     # 等待所有股票数据
     while len(res["data"]) < len(STOCKS):
         time.sleep(1)
+
+    quoteContext.unsubscribe(symbols, [SubType.Quote])
     return res
 
 
@@ -103,3 +120,78 @@ def get_xiaomi_rating():
     res = requests.get(base_url, params=params)
     data = json.loads(res.text)["result"]['data']
     return data
+
+
+def submit_order():
+    """
+    根据当前价格买入小米
+    """
+    res = get_all_hk_trend()
+    xiaomi_info = [stock for stock in res['data']
+                   if stock['symbol'] == xiaomi_stock_code][0]
+    order_price = xiaomi_info['last_done']
+    resp = tradeContext.submit_order(
+        xiaomi_stock_code,
+        OrderType.MO,
+        OrderSide.Buy,
+        Decimal(200),
+        TimeInForceType.Day
+    )
+    BUY_ORDERS.append(Order(resp.order_id, order_price, False))
+    return resp.order_id
+
+
+def get_order_status(order_id):
+    resp = tradeContext.order_detail(
+        order_id=order_id,
+    )
+    return resp.status == OrderStatus.Filled
+
+
+def sell_order():
+    """
+    卖出小米
+    """
+    last_check_time = time.time()
+    def on_quote(symbol: str, event: PushQuote):
+        nonlocal last_check_time
+        current_time = time.time()
+        if current_time - last_check_time < 3:
+            return
+        last_check_time = current_time
+        if len(BUY_ORDERS) == 0:
+            return
+        order_price = float(BUY_ORDERS[0].order_price)
+        last_done = float(event.last_done)
+        if last_done - order_price < TARGET_PRICE:
+            return
+        if BUY_ORDERS[0].order_status == False:
+            BUY_ORDERS[0].order_status = get_order_status(
+                BUY_ORDERS[0].order_id)
+            return
+        if len(SELL_ORDERS) == 0 and BUY_ORDERS[0].order_status:
+            resp = tradeContext.submit_order(
+                xiaomi_stock_code,
+                OrderType.MO,
+                OrderSide.Sell,
+                Decimal(200),
+                TimeInForceType.Day,
+            )
+            SELL_ORDERS.append(Order(resp.order_id, last_done, False))
+
+    quoteContext.set_on_quote(on_quote)
+    quoteContext.subscribe([xiaomi_stock_code], [
+                           SubType.Quote], is_first_push=True)
+
+    # 每天下午四点, 结束监听
+    while datetime.now().hour < 16:
+        time.sleep(1)
+
+    quoteContext.unsubscribe([xiaomi_stock_code], [SubType.Quote])
+    global TODAY_IS_BUY
+    TODAY_IS_BUY = False
+    # 如果已卖出，则清空订单
+    if get_order_status(SELL_ORDERS[0].order_id):
+        SELL_ORDERS.clear()
+    if BUY_ORDERS[0].order_status:
+        BUY_ORDERS.clear()
