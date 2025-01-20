@@ -28,7 +28,7 @@ class BaseMonitor:
 class OpeningMonitor(BaseMonitor):
     def __init__(self, name):
         super().__init__(name)
-        self.time = "15:20"
+        self.time = "09:00"
 
     def try_get_news(self, func):
         try:
