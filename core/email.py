@@ -5,7 +5,6 @@ yag = yagmail.SMTP(user=qq_email,
                    password=qq_email_authorization_code,
                    host=qq_email_host)
 
-
 def send_email(subject, content):
     try:
         yag.send(to=qq_email, subject=subject, contents=content)

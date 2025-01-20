@@ -1,12 +1,8 @@
-import datetime
 import json
 import time
 import requests
-from decimal import Decimal
-from longport.openapi import QuoteContext, Config, SubType, PushQuote, OrderType, OrderSide, TimeInForceType, TradeContext
-from longport.openapi import OrderStatus, Market
-from .constans import xiaomi_stock_code
-from .order import TODAY_IS_BUY, BUY_ORDERS, SELL_ORDERS, TARGET_PRICE, Order
+from longport.openapi import QuoteContext, Config, SubType, PushQuote, TradeContext
+from .constans import xiaomi_stock_code, rebang_today_base_url, common_header, rebang_today_name
 
 config = Config.from_env()
 quoteContext = QuoteContext(config)
@@ -21,15 +17,6 @@ STOCKS = {
     "388.HK": "香港交易所",
 }
 
-def test():
-    res = []
-    def on_quote(symbol: str, event: PushQuote):
-        print(event)
-    
-    quoteContext.set_on_quote(on_quote)
-    quoteContext.subscribe([xiaomi_stock_code], [SubType.Quote], is_first_push=True)
-    while True:
-        time.sleep(1)
 
 def get_all_hk_trend():
     """
@@ -87,7 +74,6 @@ def get_xiaomi_dashi():
     data = json.loads(res.text)["data"]
     return data
 
-
 def get_xiaomi_news():
     """
     获取小米最近资讯
@@ -98,7 +84,6 @@ def get_xiaomi_news():
     res = requests.post(url, data=json.dumps(data))
     data = json.loads(res.text)["data"]['items']
     return data
-
 
 def get_xiaomi_rating():
     """
@@ -121,77 +106,163 @@ def get_xiaomi_rating():
     data = json.loads(res.text)["result"]['data']
     return data
 
-
-def submit_order():
+def get_rebang_today_news():
     """
-    根据当前价格买入小米
+    rebang.today 综合新闻
     """
-    res = get_all_hk_trend()
-    xiaomi_info = [stock for stock in res['data']
-                   if stock['symbol'] == xiaomi_stock_code][0]
-    order_price = xiaomi_info['last_done']
-    resp = tradeContext.submit_order(
-        xiaomi_stock_code,
-        OrderType.MO,
-        OrderSide.Buy,
-        Decimal(200),
-        TimeInForceType.Day
-    )
-    BUY_ORDERS.append(Order(resp.order_id, order_price, False))
-    return resp.order_id
+    params = {
+        "tab": "top",
+        "sub_tab": "today",
+        "page": 1,
+        "version": 1
+    }
+    base_url = f"{rebang_today_base_url}/v1/items"
+    res = requests.get(base_url, params=params, headers=common_header)
+    data = json.loads(res.json()['data']['list'])
+    content = f"""## `{rebang_today_name}`综合新闻\n\n"""
+    for item in data:
+        content += f"""- {item['title']}({'暂无描述' if item['desc'] == '' else item['desc']})\n"""
+    return content
 
-
-def get_order_status(order_id):
-    resp = tradeContext.order_detail(
-        order_id=order_id,
-    )
-    return resp.status == OrderStatus.Filled
-
-
-def sell_order():
+def get_rebang_zhihu_news():
     """
-    卖出小米
+    rebang.today 知乎新闻
     """
-    last_check_time = time.time()
-    def on_quote(symbol: str, event: PushQuote):
-        nonlocal last_check_time
-        current_time = time.time()
-        if current_time - last_check_time < 3:
-            return
-        last_check_time = current_time
-        if len(BUY_ORDERS) == 0:
-            return
-        order_price = float(BUY_ORDERS[0].order_price)
-        last_done = float(event.last_done)
-        if last_done - order_price < TARGET_PRICE:
-            return
-        if BUY_ORDERS[0].order_status == False:
-            BUY_ORDERS[0].order_status = get_order_status(
-                BUY_ORDERS[0].order_id)
-            return
-        if len(SELL_ORDERS) == 0 and BUY_ORDERS[0].order_status:
-            resp = tradeContext.submit_order(
-                xiaomi_stock_code,
-                OrderType.MO,
-                OrderSide.Sell,
-                Decimal(200),
-                TimeInForceType.Day,
-            )
-            SELL_ORDERS.append(Order(resp.order_id, last_done, False))
+    params = {
+        "tab": "zhihu",
+        "date_type": "now",
+        "page": 1,
+        "version": 1
+    }
+    base_url = f"{rebang_today_base_url}/v1/items"
+    res = requests.get(base_url, params=params, headers=common_header)
+    data = json.loads(res.json()['data']['list'])
+    content = f"""## `{rebang_today_name}`知乎新闻\n\n"""
+    for item in data:
+        content += f"""- {item['title']}({'暂无描述' if item['describe'] == '' else item['describe']})\n"""
+    return content
 
-    quoteContext.set_on_quote(on_quote)
-    quoteContext.subscribe([xiaomi_stock_code], [
-                           SubType.Quote], is_first_push=True)
+def get_rebang_weibo_news():
+    """
+    rebang.today 微博新闻
+    """
+    params = {
+        "tab": "weibo",
+        "sub_tab": "news",
+        "page": 1,
+        "version": 2
+    }
+    base_url = f"{rebang_today_base_url}/v1/items"
+    res = requests.get(base_url, params=params, headers=common_header)
+    data = json.loads(res.json()['data']['list'])
+    content = f"""## `{rebang_today_name}`微博新闻\n\n"""
+    for item in data:
+        content += f"""- {item['title']}\n"""
+    return content
 
-    # 每天下午四点, 结束监听
-    while datetime.now().hour < 16:
-        time.sleep(1)
+def get_rebang_ithome_news():
+    """
+    rebang.today IT之家新闻
+    """
+    params = {
+        "tab": "ithome",
+        "sub_tab": "today",
+        "page": 1,
+        "version": 1
+    }
+    base_url = f"{rebang_today_base_url}/v1/items"
+    res = requests.get(base_url, params=params, headers=common_header)
+    data = json.loads(res.json()['data']['list'])
+    content = f"""## `{rebang_today_name}`IT之家新闻\n\n"""
+    for item in data:
+        content += f"""- {item['title']}({'暂无描述' if item['desc'] == '' else item['desc']})\n"""
+    return content
 
-    quoteContext.unsubscribe([xiaomi_stock_code], [SubType.Quote])
-    global TODAY_IS_BUY
-    TODAY_IS_BUY = False
-    # 如果已卖出，则清空订单
-    if get_order_status(SELL_ORDERS[0].order_id):
-        SELL_ORDERS.clear()
-    if BUY_ORDERS[0].order_status:
-        BUY_ORDERS.clear()
+def get_rebang_thepaper_news():
+    """
+    rebang.today 澎湃新闻
+    """
+    params = {
+        "tab": "thepaper", 
+        "sub_tab": "hot",
+        "page": 1,
+        "version": 1
+    }
+    base_url = f"{rebang_today_base_url}/v1/items"
+    res = requests.get(base_url, params=params, headers=common_header)
+    data = json.loads(res.json()['data']['list'])
+    content = f"""## `{rebang_today_name}`澎湃新闻\n\n"""
+    for item in data:
+        content += f"""- {item['title']}({'暂无描述' if item['desc'] == '' else item['desc']})\n"""
+    return content
+
+def get_rebang_toutiao_news():
+    """
+    rebang.today 头条新闻
+    """
+    params = {
+        "tab": "toutiao",
+        "page": 1,
+        "version": 1
+    }
+    base_url = f"{rebang_today_base_url}/v1/items"
+    res = requests.get(base_url, params=params, headers=common_header)
+    data = json.loads(res.json()['data']['list'])
+    content = f"""## `{rebang_today_name}`头条新闻\n\n"""
+    for item in data:
+        content += f"""- {item['title']}\n"""
+    return content
+
+def get_rebang_xueqiu_news():
+    """
+    rebang.today 雪球新闻
+    """
+    params = {
+        "tab": "xueqiu",
+        "sub_tab": "topic",
+        "page": 1,
+        "version": 1
+    }
+    base_url = f"{rebang_today_base_url}/v1/items"
+    res = requests.get(base_url, params=params, headers=common_header)
+    data = json.loads(res.json()['data']['list'])
+    content = f"""## `{rebang_today_name}`雪球新闻\n\n"""
+    for item in data:
+        content += f"""- {item['title']}({'暂无描述' if item['desc'] == '' else item['desc']})\n"""
+    return content
+
+def get_rebang_eastmoney_news():
+    """
+    rebang.today 东方财富新闻
+    """
+    params = {
+        "tab": "eastmoney",
+        "sub_tab": "news",
+        "page": 1,
+        "version": 1
+    }
+    base_url = f"{rebang_today_base_url}/v1/items"
+    res = requests.get(base_url, params=params, headers=common_header)
+    data = json.loads(res.json()['data']['list'])
+    content = f"""## `{rebang_today_name}`东方财富新闻\n\n"""
+    for item in data:
+        content += f"""- {item['title']}({'暂无描述' if item['desc'] == '' else item['desc']})\n"""
+    return content
+
+def get_rebang_diyicaijing_news():
+    """
+    rebang.today 第一财经新闻
+    """
+    params = {
+        "tab": "diyicaijing",
+        "sub_tab": "headline",
+        "page": 1,
+        "version": 1
+    }
+    base_url = f"{rebang_today_base_url}/v1/items"
+    res = requests.get(base_url, params=params, headers=common_header)
+    data = json.loads(res.json()['data']['list'])
+    content = f"""## `{rebang_today_name}`第一财经新闻\n\n"""
+    for item in data:
+        content += f"""- {item['title']}({'暂无描述' if item['desc'] == '' else item['desc']})\n"""
+    return content
