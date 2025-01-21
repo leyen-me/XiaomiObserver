@@ -20,6 +20,14 @@ STOCKS = {
     "388.HK": "香港交易所",
 }
 
+
+def get_order_hk_trend():
+    current_orders = tradeContext.today_executions(symbol=xiaomi_stock_code)
+    for order in current_orders:
+        return f"""持仓时间: {order.trade_done_at}，持仓数量：{order.quantity}，持仓价格：{order.price}"""
+    return "暂无订单"
+
+
 def get_dingpan_hk_trend():
     res = []
     last_query_time = [0]
@@ -30,14 +38,16 @@ def get_dingpan_hk_trend():
 
         if current_time - last_query_time[0] >= 15:
             point = str(event)
-            current_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(current_time))
+            current_time_str = time.strftime(
+                "%Y-%m-%d %H:%M:%S", time.localtime(current_time))
             print(f"[{current_time_str}] Data point: {point}")
             res.append(point)
             last_query_time[0] = current_time
 
         if current_time - last_analysis_time[0] >= 60:
             # 获取当日订单
-            current_orders = str(tradeContext.today_executions(symbol = xiaomi_stock_code))
+            current_orders = str(
+                tradeContext.today_executions(symbol=xiaomi_stock_code))
             response = client.chat.completions.create(
                 model=model,
                 messages=[
@@ -56,7 +66,7 @@ def get_dingpan_hk_trend():
 {json.dumps(res, indent=2)}
 
 2. 当前订单情况：
-{'当前订单数据为：' + current_orders if len(current_orders) > 0 else '暂无订单'}
+{get_order_hk_trend()}
                     """},
                     {"role": "assistant", "content": "我会基于技术分析和日内交易策略给出建议。"},
                     {"role": "user", "content": """
@@ -67,11 +77,14 @@ def get_dingpan_hk_trend():
                     """}
                 ],
             )
-            current_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(current_time))
-            print(f"[{current_time_str}] Analysis: {response.choices[0].message.content}")
-            send_email(f"[{current_time_str}] Analysis", response.choices[0].message.content)
+            current_time_str = time.strftime(
+                "%Y-%m-%d %H:%M:%S", time.localtime(current_time))
+            print(
+                f"[{current_time_str}] Analysis: {response.choices[0].message.content}")
+            send_email(f"[{current_time_str}] Analysis",
+                       response.choices[0].message.content)
             last_analysis_time[0] = current_time
-    
+
     quoteContext.set_on_quote(on_quote)
     quoteContext.subscribe([xiaomi_stock_code], [
                            SubType.Quote], is_first_push=True)
