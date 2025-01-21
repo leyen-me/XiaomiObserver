@@ -27,7 +27,7 @@ def get_order_hk_trend():
         return "暂无订单"
     if len(current_orders) == 1:
         return f"""持仓时间: {current_orders[0].trade_done_at}，持仓数量：{current_orders[0].quantity}，持仓价格：{current_orders[0].price}"""
-    return "暂无订单"
+    return "今日订单已完成"
 
 
 def get_dingpan_hk_trend():
@@ -47,6 +47,9 @@ def get_dingpan_hk_trend():
             last_query_time[0] = current_time
 
         if current_time - last_analysis_time[0] >= 60:
+            order_trend = get_order_hk_trend()
+            if order_trend == "今日订单已完成":
+                return res
             response = client.chat.completions.create(
                 model=model,
                 messages=[
@@ -65,7 +68,7 @@ def get_dingpan_hk_trend():
 {json.dumps(res, indent=2)}
 
 2. 当前订单情况：
-{get_order_hk_trend()}
+{order_trend}
                     """},
                     {"role": "assistant", "content": "我会基于技术分析和日内交易策略给出建议。"},
                     {"role": "user", "content": """
