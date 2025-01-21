@@ -81,7 +81,7 @@ class OpeningMonitor(BaseMonitor):
 
 
 
-class DingPanMonitor:
+class DingPanMonitor(BaseMonitor):
     def __init__(self, name):
         super().__init__(name)
         self.time = "09:30"
