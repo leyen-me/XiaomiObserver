@@ -2,7 +2,10 @@ import json
 import time
 import requests
 from longport.openapi import QuoteContext, Config, SubType, PushQuote, TradeContext
+
+from core.email import send_email
 from .constans import xiaomi_stock_code, rebang_today_base_url, common_header, rebang_today_name
+from .query import client, model
 
 config = Config.from_env()
 quoteContext = QuoteContext(config)
@@ -16,6 +19,61 @@ STOCKS = {
     "3690.HK": "美团",
     "388.HK": "香港交易所",
 }
+
+def get_dingpan_hk_trend():
+    res = []
+    last_query_time = [0]
+    last_analysis_time = [0]
+
+    def on_quote(symbol: str, event: PushQuote):
+        current_time = time.time()
+
+        if current_time - last_query_time[0] >= 15:
+            point = str(event)
+            current_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(current_time))
+            print(f"[{current_time_str}] Data point: {point}")
+            res.append(point)
+            last_query_time[0] = current_time
+
+        if current_time - last_analysis_time[0] >= 60:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": """
+你是一位专业的股票交易分析师，专注于小米集团的盘中技术分析。你需要:
+1. 关注价格趋势、成交量变化和短期支撑/阻力位
+2. 分析K线形态和技术指标
+3. 考虑市场情绪和大盘影响
+4. 给出清晰的交易建议
+                    """},
+                    {"role": "user", "content": "基于以下实时交易数据，请分析小米股票的短线交易信号：\n" + json.dumps(res, indent=2)},
+                    {"role": "assistant", "content": "我会基于技术分析给出建议。"},
+                    {"role": "user", "content": """
+请从以下三个选项中选择一个，并简要说明理由（限50字以内）：
+1. 买入信号：说明看多理由
+2. 卖出信号：说明看空理由
+3. 观望信号：说明需要等待的具体条件
+                    """}
+                ],
+            )
+            current_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(current_time))
+            print(f"[{current_time_str}] Analysis: {response.choices[0].message.content}")
+            send_email(f"[{current_time_str}] Analysis", response.choices[0].message.content)
+            last_analysis_time[0] = current_time
+    
+    quoteContext.set_on_quote(on_quote)
+    quoteContext.subscribe([xiaomi_stock_code], [
+                           SubType.Quote], is_first_push=True)
+
+    # 等待时间小于下午4点
+    while True:
+        current_time = time.localtime()
+        if current_time.tm_hour >= 16:
+            break
+        time.sleep(1)
+
+    quoteContext.unsubscribe([xiaomi_stock_code], [SubType.Quote])
+    return res
 
 
 def get_all_hk_trend():
@@ -74,6 +132,7 @@ def get_xiaomi_dashi():
     data = json.loads(res.text)["data"]
     return data
 
+
 def get_xiaomi_news():
     """
     获取小米最近资讯
@@ -84,6 +143,7 @@ def get_xiaomi_news():
     res = requests.post(url, data=json.dumps(data))
     data = json.loads(res.text)["data"]['items']
     return data
+
 
 def get_xiaomi_rating():
     """
@@ -106,6 +166,7 @@ def get_xiaomi_rating():
     data = json.loads(res.text)["result"]['data']
     return data
 
+
 def get_rebang_today_news():
     """
     rebang.today 综合新闻
@@ -123,6 +184,7 @@ def get_rebang_today_news():
     for item in data:
         content += f"""- {item['title']}({'暂无描述' if item['desc'] == '' else item['desc']})\n"""
     return content
+
 
 def get_rebang_zhihu_news():
     """
@@ -142,6 +204,7 @@ def get_rebang_zhihu_news():
         content += f"""- {item['title']}({'暂无描述' if item['describe'] == '' else item['describe']})\n"""
     return content
 
+
 def get_rebang_weibo_news():
     """
     rebang.today 微博新闻
@@ -159,6 +222,7 @@ def get_rebang_weibo_news():
     for item in data:
         content += f"""- {item['title']}\n"""
     return content
+
 
 def get_rebang_ithome_news():
     """
@@ -178,12 +242,13 @@ def get_rebang_ithome_news():
         content += f"""- {item['title']}({'暂无描述' if item['desc'] == '' else item['desc']})\n"""
     return content
 
+
 def get_rebang_thepaper_news():
     """
     rebang.today 澎湃新闻
     """
     params = {
-        "tab": "thepaper", 
+        "tab": "thepaper",
         "sub_tab": "hot",
         "page": 1,
         "version": 1
@@ -195,6 +260,7 @@ def get_rebang_thepaper_news():
     for item in data:
         content += f"""- {item['title']}({'暂无描述' if item['desc'] == '' else item['desc']})\n"""
     return content
+
 
 def get_rebang_toutiao_news():
     """
@@ -212,6 +278,7 @@ def get_rebang_toutiao_news():
     for item in data:
         content += f"""- {item['title']}\n"""
     return content
+
 
 def get_rebang_xueqiu_news():
     """
@@ -231,6 +298,7 @@ def get_rebang_xueqiu_news():
         content += f"""- {item['title']}({'暂无描述' if item['desc'] == '' else item['desc']})\n"""
     return content
 
+
 def get_rebang_eastmoney_news():
     """
     rebang.today 东方财富新闻
@@ -248,6 +316,7 @@ def get_rebang_eastmoney_news():
     for item in data:
         content += f"""- {item['title']}({'暂无描述' if item['desc'] == '' else item['desc']})\n"""
     return content
+
 
 def get_rebang_diyicaijing_news():
     """

@@ -1,10 +1,12 @@
 import schedule
 import time
 from datetime import datetime
-from core import OpeningMonitor
+from core import OpeningMonitor, DingPanMonitor
+from core.hk import get_dingpan_hk_trend
 
 monitor = [
     OpeningMonitor("开盘前分析"),
+    DingPanMonitor("盯盘数据分析")
 ]
 for m in monitor:
     schedule.every().day.at(m.time).do(m.start)

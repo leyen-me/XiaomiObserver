@@ -4,6 +4,7 @@ from .hk import get_rebang_today_news, get_rebang_weibo_news, get_rebang_zhihu_n
 from .hk import get_rebang_diyicaijing_news, get_rebang_eastmoney_news, get_rebang_ithome_news, get_rebang_thepaper_news, get_rebang_toutiao_news, get_rebang_xueqiu_news
 from .query import client, model
 from .constans import system_prompt
+from .hk import get_dingpan_hk_trend
 
 
 class BaseMonitor:
@@ -76,3 +77,22 @@ class OpeningMonitor(BaseMonitor):
             ],
         )
         return response.choices[0].message.content
+
+
+
+
+class DingPanMonitor:
+    def __init__(self, name):
+        super().__init__(name)
+        self.time = "09:30"
+
+    def run(self):
+        try:
+            trend_data = get_dingpan_hk_trend()
+            if trend_data:
+                return f"盯盘数据收集完成，共收集 {len(trend_data)} 条数据点"
+            return "未收集到盯盘数据"
+        except Exception as e:
+            print(f"盯盘监控异常: {e}")
+            return "盯盘监控执行失败"
+
