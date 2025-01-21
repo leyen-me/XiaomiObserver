@@ -23,11 +23,10 @@ STOCKS = {
 
 def get_order_hk_trend():
     current_orders = tradeContext.today_executions(symbol=xiaomi_stock_code)
-    for order in current_orders:
-        if len(current_orders) == 1:
-            return f"""持仓时间: {order.trade_done_at}，持仓数量：{order.quantity}，持仓价格：{order.price}"""
-        else:
-            return "暂无订单"
+    if len(current_orders) == 0:
+        return "暂无订单"
+    if len(current_orders) == 1:
+        return f"""持仓时间: {current_orders[0].trade_done_at}，持仓数量：{current_orders[0].quantity}，持仓价格：{current_orders[0].price}"""
     return "暂无订单"
 
 
