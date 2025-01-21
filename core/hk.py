@@ -24,7 +24,10 @@ STOCKS = {
 def get_order_hk_trend():
     current_orders = tradeContext.today_executions(symbol=xiaomi_stock_code)
     for order in current_orders:
-        return f"""持仓时间: {order.trade_done_at}，持仓数量：{order.quantity}，持仓价格：{order.price}"""
+        if len(current_orders) == 1:
+            return f"""持仓时间: {order.trade_done_at}，持仓数量：{order.quantity}，持仓价格：{order.price}"""
+        else:
+            return "暂无订单"
     return "暂无订单"
 
 
@@ -45,9 +48,6 @@ def get_dingpan_hk_trend():
             last_query_time[0] = current_time
 
         if current_time - last_analysis_time[0] >= 60:
-            # 获取当日订单
-            current_orders = str(
-                tradeContext.today_executions(symbol=xiaomi_stock_code))
             response = client.chat.completions.create(
                 model=model,
                 messages=[
