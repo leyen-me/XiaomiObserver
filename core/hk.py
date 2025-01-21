@@ -36,6 +36,8 @@ def get_dingpan_hk_trend():
             last_query_time[0] = current_time
 
         if current_time - last_analysis_time[0] >= 60:
+            # 获取当日订单
+            current_orders = str(tradeContext.today_executions(symbol = xiaomi_stock_code))
             response = client.chat.completions.create(
                 model=model,
                 messages=[
@@ -45,14 +47,22 @@ def get_dingpan_hk_trend():
 2. 分析K线形态和技术指标
 3. 考虑市场情绪和大盘影响
 4. 给出清晰的交易建议
+5. 结合当前持仓和订单情况给出具体建议
                     """},
-                    {"role": "user", "content": "基于以下实时交易数据，请分析小米股票的短线交易信号：\n" + json.dumps(res, indent=2)},
-                    {"role": "assistant", "content": "我会基于技术分析给出建议。"},
+                    {"role": "user", "content": f"""
+基于以下信息进行分析：
+1. 实时交易数据：
+{json.dumps(res, indent=2)}
+
+2. 当前订单情况：
+{current_orders}
+                    """},
+                    {"role": "assistant", "content": "我会基于技术分析和日内交易策略给出建议。"},
                     {"role": "user", "content": """
-请从以下三个选项中选择一个，并简要说明理由（限50字以内）：
-1. 买入信号：说明看多理由
-2. 卖出信号：说明看空理由
-3. 观望信号：说明需要等待的具体条件
+请结合1%的日内获利目标，从以下选项中选择一个，并说明理由（限50字以内）：
+1. 买入信号：指定买入价格和数量
+2. 卖出信号：指定卖出价格和数量
+3. 观望信号：说明等待的具体条件和目标价位
                     """}
                 ],
             )

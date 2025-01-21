@@ -2,7 +2,6 @@ import schedule
 import time
 from datetime import datetime
 from core import OpeningMonitor, DingPanMonitor
-from core.hk import get_dingpan_hk_trend
 
 monitor = [
     OpeningMonitor("开盘前分析"),
